@@ -18,6 +18,8 @@ at the moment, the most reliable one is the RBF kernel. Note that currently the
 laplacian kernel does not work"""
         
 
+def kernel_linear(matrix_1, matrix_2, paramters = None):
+    return inner_matrix(matrix_1, matrix_2)
 # Define the RBF Kernel. Takes an array of parameters, returns a value
 def kernel_RBF(matrix_1, matrix_2, parameters):
     matrix = norm_matrix(matrix_1, matrix_2)

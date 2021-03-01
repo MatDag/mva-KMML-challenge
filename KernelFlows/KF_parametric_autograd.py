@@ -11,6 +11,9 @@ from autograd import value_and_grad
 import math
 
 from kernel_functions_autograd import kernels_dic
+from matrix_operations_autograd import norm_matrix
+
+default_reg = 1e-5
 
 #%%
     
@@ -47,7 +50,7 @@ def batch_creation(data, batch_size, sample_proportion = 0.5):
 
 
 # Generate a prediction
-def kernel_regression(X_train, X_test, Y_train, param, kernel_keyword = "RBF", reg = 0.000001):
+def kernel_regression(X_train, X_test, Y_train, param, kernel_keyword = "RBF", reg = default_reg):
     kernel = kernels_dic[kernel_keyword]
 
     
@@ -83,7 +86,7 @@ def pi_matrix(sample_indices, dimension):
 
 
 # The rho function
-def rho(parameters, matrix_data, Y_data, sample_indices,  kernel_keyword= "RBF", reg = 0.000001):
+def rho(parameters, matrix_data, Y_data, sample_indices,  kernel_keyword= "RBF", reg = default_reg):
     kernel = kernels_dic[kernel_keyword]    
     kernel_matrix = kernel(matrix_data, matrix_data, parameters)
     
@@ -113,7 +116,7 @@ def l2(parameters, matrix_data, Y, batch_indices, sample_indices, kernel_keyword
     
     return np.dot(Y_not_sample - prediction, Y_not_sample- prediction)
 
-def mmd(parameters, matrix_data, Y_data, sample_indices, kernel_keyword= "RBF", reg = 0.000001):
+def mmd(parameters, matrix_data, Y_data, sample_indices, kernel_keyword= "RBF", reg =default_reg):
     matrix_1 = matrix_data
     matrix_2 = matrix_data[sample_indices]
     
@@ -139,12 +142,12 @@ def mmd(parameters, matrix_data, Y_data, sample_indices, kernel_keyword= "RBF", 
 calculator function accesses the gradfunctions via a keyword"""
 
 # Gradient calculator function. Returns an array
-def grad_rho(parameters, X_data, Y_data, sample_indices, kernel_keyword= "RBF", reg = 0.000001):
+def grad_rho(parameters, X_data, Y_data, sample_indices, kernel_keyword= "RBF", reg = default_reg):
     grad_K = value_and_grad(rho)
     rho_value, gradient = grad_K(parameters, X_data, Y_data, sample_indices, kernel_keyword, reg = reg)
     return rho_value, gradient
 
-def grad_mmd(parameters, X_data, Y_data, sample_indices, kernel_keyword= "RBF", reg = 0.000001):
+def grad_mmd(parameters, X_data, Y_data, sample_indices, kernel_keyword= "RBF", reg = default_reg):
     grad_K = value_and_grad(mmd)
     rho_value, gradient = grad_K(parameters, X_data, Y_data, sample_indices, kernel_keyword, reg = reg)
     return rho_value, gradient
@@ -155,9 +158,14 @@ grad_dic = {"rho" : grad_rho, "mmd": grad_mmd}
     
 class KernelFlowsPAutograd():
     
-    def __init__(self, kernel_keyword, parameters):
+    def __init__(self, kernel_keyword, parameters, custom_kernel = None):
         self.kernel_keyword = kernel_keyword
+        
+                # For custom kernels
+        if self.kernel_keyword == "custom":
+            kernels_dic["custom"] = custom_kernel
         self.parameters = np.copy(parameters)
+        
         
         # Lists that keep track of the history of the algorithm
         self.rho_values = []
@@ -190,7 +198,7 @@ class KernelFlowsPAutograd():
         
     
     def fit(self, X, Y, iterations, batch_size = False, optimizer = "SGD", 
-            learning_rate = 0.1, beta = 0.9, show_it = 100, reg = 0.000001, 
+            learning_rate = 0.1, beta = 0.9, show_it = 100, reg = default_reg, 
             adaptive_size = False, adaptive_range = (), proportion = 0.5, 
             reduction_constant = 0.0, loss = "rho"):            
 
@@ -198,6 +206,8 @@ class KernelFlowsPAutograd():
         self.set_beta(beta)
         self.reg = reg
         
+
+            
         self.X_train = np.copy(X)
         self.Y_train = np.copy(Y)
         momentum = np.zeros(self.parameters.shape, dtype = "float")
@@ -278,7 +288,7 @@ class KernelFlowsPAutograd():
                 
         return self.parameters
     
-    def predict(self,test, reg = 0.000001):
+    def predict(self,test, reg = default_reg):
          
         X_train = self.X_train
         Y_train = self.Y_train
@@ -289,6 +299,7 @@ class KernelFlowsPAutograd():
 
 #%%
         
+
 if __name__ == "__main__":
     # Generating data according to RBF kernel, true gamma is 0.1
     from autograd.numpy.random import uniform
@@ -297,21 +308,42 @@ if __name__ == "__main__":
         values = uniform(-10, 10, dimensions)
         b = []
         for element in values:
-            b.append( np.exp(-np.linalg.norm(element)**2 /(2*mu_correct[0]**2)))
+            b.append( np.exp(-np.linalg.norm(element)**2 /(mu_correct[0]**2)))
         b = np.array(b) #+ normal(0, 0.25)
         return b, values
 
+    it  =1000
     mu_correct = np.array([10.0])
     Y, X = data_set_RBF((100, 1), mu_correct)
     data_set = np.concatenate((X,np.expand_dims(Y, 1)), axis = 1)
     
     mu_1 = np.array([1.0])
     K = KernelFlowsPAutograd("RBF", mu_1)
-    mu_pred = K.fit(X, Y, 10000, optimizer = "Nesterov",  batch_size = 50, show_it = 5000)
+    mu_pred = K.fit(X, Y, it, optimizer = "Nesterov",  batch_size = 50, show_it = 5000)
     print(mu_pred)
     
     mu_2 = np.array([15.0])
     K = KernelFlowsPAutograd("RBF", mu_2)
-    mu_pred = K.fit(X, Y, 10000, optimizer = "Nesterov", batch_size = 50, show_it = 5000)
+    mu_pred = K.fit(X, Y, it, optimizer = "Nesterov", batch_size = 50, show_it = 5000)
     print(mu_pred)
 
+    # Testing a custom kernel
+    
+    def custom_kernel(matrix_1, matrix_2, parameters):
+        matrix_norm = norm_matrix(matrix_1, matrix_2)
+        sigma_1 = parameters[0]
+        sigma_2 = parameters[1] 
+        return np.exp(-matrix_norm/ (sigma_1**2)) + np.exp(-np.sqrt(matrix_norm)/(sigma_2**2))
+    
+    mu_3 = np.array([1.0, 1.0])
+    K = KernelFlowsPAutograd("custom", mu_3, custom_kernel)
+    mu_pred = K.fit(X, Y, it, optimizer = "Nesterov",  batch_size = 50, show_it = 5000)
+    print(mu_pred)
+    
+    pred = K.predict(X)
+    
+    # Testing the full kernel
+    mu_4 = np.ones(9).astype("float")
+    K = KernelFlowsPAutograd("full", mu_4)
+    mu_pred = K.fit(X, Y, it, optimizer = "Nesterov",  batch_size = 50, show_it = 5000)
+    print(mu_pred)
