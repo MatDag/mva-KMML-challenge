@@ -6,10 +6,7 @@ Created on Wed Feb 24 11:40:36 2021
 """
 
 import numpy as np 
-import sys
-sys.path.append('../General')
 from kernel_functions import kernels_dic
-
 
 default_lambda = 1e-5
 
@@ -20,7 +17,7 @@ default_lambda = 1e-5
 # Generate a prediction
 def kernel_regression(X_train, X_test, Y_train, param, kernel_keyword = "RBF", reg = default_lambda):
     kernel = kernels_dic[kernel_keyword]
-    
+
     # The data matrix (theta in the original paper)
     k_matrix = kernel(X_train, X_train, param)
     k_matrix += reg * np.identity(k_matrix.shape[0])
@@ -57,7 +54,7 @@ class KernelRegression():
         
     def fit(self, X_train, Y_train, reg = default_lambda):
         self.coeff = kernel_regression_coeff(X_train, Y_train, self.parameters, kernel_keyword = self.kernel_keyword, reg = reg)
-        self.X_train = X_train.copy()
+        self.X_train = np.copy(X_train)
         
     def predict(self, X_test, reg = default_lambda):  
         kernel = kernels_dic[self.kernel_keyword]
