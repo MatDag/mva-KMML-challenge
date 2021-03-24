@@ -9,6 +9,8 @@ Created on Wed Jul 22 14:32:37 2020
 import numpy as np
 from matrix_operations import norm_matrix
 from matrix_operations import inner_matrix
+import scipy.sparse as sp
+from spectrum_toolbox import Spectrum_embedding,preindexation
 
 
 #%%
@@ -18,8 +20,6 @@ at the moment, the most reliable one is the RBF kernel. Note that currently the
 laplacian kernel does not work"""
         
 
-def kernel_linear(matrix_1, matrix_2, paramters = None):
-    return inner_matrix(matrix_1, matrix_2)
 # Define the RBF Kernel. Takes an array of parameters, returns a value
 def kernel_RBF(matrix_1, matrix_2, parameters):
     matrix = norm_matrix(matrix_1, matrix_2)
@@ -92,6 +92,27 @@ def kernel_gaussian_linear(matrix_1, matrix_2, parameters):
         K = K + parameters[1, i]**2*np.exp(-matrix / (2* parameters[0, i]**2))
     return K
 
+def kernel_spectrum(sequences1,sequences2,parameters):
+    # Une série de tests pour garder la possibilité de mettre en entrée soit les séquences, soit leur représentation vectorielle
+    if isinstance(sequences1,sp.csr.csr_matrix):
+        embedding1 = sequences1
+    else:
+        if not('preindex' in parameters):
+            parameters['preindex'] = preindexation(parameters['k'])
+        embedding1 = Spectrum_embedding(sequences1,parameters['k'],preindex = parameters['preindex'])
+        
+    if isinstance(sequences2,sp.csr.csr_matrix):
+        embedding2 = sequences2
+    else:
+        print(type(sequences2))
+        if not('preindex' in parameters):
+                    parameters['preindex'] = preindexation(parameters['k'])
+        embedding2 = Spectrum_embedding(sequences2,parameters['k'],preindex = parameters['preindex']) 
+        
+    K = embedding1.dot(embedding2.T)
+    return(K.toarray())
+
+
 """A dictionnary containing the different kernels. If you wish to build a custom 
  kernel, add the function to the dictionnary.
 """
@@ -99,4 +120,4 @@ kernels_dic = {"RBF" : kernel_RBF,"poly": kernel_poly, "laplacian": kernel_lapla
                "sigmoid": kernel_sigmoid, "rational quadratic": kernel_rational_quadratic,
                "inverse_multiquad": kernel_inverse_multiquad, "quadratic" : kernel_quad,
                "poly": kernel_poly, "inverse_power_alpha": kernel_inverse_power_alpha,
-               "gaussian multi": kernel_gaussian_linear}
+               "gaussian multi": kernel_gaussian_linear,"spectrum": kernel_spectrum}
